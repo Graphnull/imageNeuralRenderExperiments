@@ -86,13 +86,13 @@ let xys = [
 
 let modelTimeToXYCreate = () => {
   const model = tf.sequential();
-  model.add(tf.layers.dense({ units: 32, activation: 'linear', inputShape: [13] }));
+  model.add(tf.layers.dense({ units: 32, activation: 'linear', kernelRegularizer:'l1l2', biasRegularizer:'l1l2', inputShape: [13] }));
   model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
 
-  model.add(tf.layers.dense({ units: 8, activation: 'linear', }));
+  model.add(tf.layers.dense({ units: 8, activation: 'linear', kernelRegularizer:'l1l2', biasRegularizer:'l1l2', }));
   model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
 
-  model.add(tf.layers.dense({ units: 2, activation: 'linear', }));
+  model.add(tf.layers.dense({ units: 2, activation: 'linear', kernelRegularizer:'l1l2', biasRegularizer:'l1l2', }));
   model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
 
   // Prepare the model for training: Specify the loss and the optimizer.
@@ -228,24 +228,27 @@ let modeltest = (model, modelTimeToXY) => {
           }, true,
             [].concat(...model.layers.map(l => l._trainableWeights.map(v => v.val)))
           )
-          let terr2 = modelTimeToXY.optimizer.minimize(() => {
+
+          let terr2 = 0
+          if(e>50){
+          terr2 = modelTimeToXY.optimizer.minimize(() => {
 
             let globalXY = modelTimeToXY.predict(codedTimes[i].reshape([1, 13])).reshape([1, 1, 1, 2]);
+            
+            let error = tf.scalar(0)
+            error = error.add(globalXY.mul(-1).relu().mean())
+            error = error.add(globalXY.sub(1).relu().mean())
+
 
             let codedGlobalXY = convertInputXY(uv.add(globalXY))
 
             let image = model.predict(tf.concat([codedGlobalXY, tf.ones([1,96,96,13]).mul(codedTimes[i])],-1), { batchSize: null })
 
-            let error = tf.scalar(0)
-            error = error.add(tf.losses.meanSquaredError(image, origImages[i]))
-
+            //error = error.add(tf.losses.meanSquaredError(image, origImages[i]))
 
             let codedTime = convertInputTime(tf.tensor([Math.random()*codedTimes.length],[1, 1, 1])).expandDims()
-            let globalXY2 = modelTimeToXY.predict(codedTime.reshape([1, 13])).reshape([1, 1, 1, 2]);
 
-            let codedGlobalXY2 = convertInputXY(uv.add(globalXY2))
-
-            let image2 = model.predict(tf.concat([codedGlobalXY2, tf.ones([1,96,96,13]).mul(codedTime)],-1), { batchSize: null })
+            let image2 = model.predict(tf.concat([codedGlobalXY, tf.ones([1,96,96,13]).mul(codedTime)],-1), { batchSize: null })
 
 
             error = error.add(tf.losses.meanSquaredError(image,image2))
@@ -254,6 +257,7 @@ let modeltest = (model, modelTimeToXY) => {
           }, true,
             [].concat(...modelTimeToXY.layers.map(l => l._trainableWeights.map(v => v.val)))
           )
+        }
           loss = loss.add(terr.add(terr2).div(origImages.length))
         }
 
