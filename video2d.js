@@ -32,7 +32,7 @@ for (let y = 0; y < h; y++) {
 }
 let fuv = tf.tensor(uvdata, [h, w, 2])
 
-uv = fuv.slice([0, 0], [96, 96])
+uv = fuv.slice([0, 0], [96, 96]).reshape([1,96,96,2])
 
 /**
  * 
@@ -43,10 +43,10 @@ let convertInputXY = (fuv) => {
   let fuv1 = fuv.slice([0, 0, 0, 0], [1, fuv.shape[1], fuv.shape[2], 1])
   let fuv2 = fuv.slice([0, 0, 0, 1], [1, fuv.shape[1], fuv.shape[2], 1])
   let params = [fuv1, fuv2]
-  for (let i = 3; i < 6200; i *= 2) {
+  for (let i = 3; i < 12400; i *= 2) {
     for (let a = 0; a < 3; a++) {
       params.push(
-        fuv1.mul(rand()).add(fuv2.mul(rand() * 2 - 1)).mul(i).sin()
+        fuv1.mul(rand()).add(fuv2.mul(rand() * 2 - 1)).mul(i).add(Math.PI*rand()  ).sin()
       )
     }
   }
@@ -63,7 +63,7 @@ let convertInputTime = (fuv) => {
   let params = [fuv]
   for (let i = 3; i < 6200; i *= 2) {
     params.push(
-      fuv.mul(i).sin()
+      fuv.mul(i).add(Math.PI*rand()  ).sin()
     )
   }
   return tf.concat(params, -1)
@@ -80,19 +80,23 @@ let save = async (tensor, name) => {
 }
 
 let xys = [
- [0,0],[5,5], [45, 75], [110, 130], [185, 160], [245, 180], [255, 210], [255, 240], [245, 270], [235, 300], [235, 330], [225, 370], [205, 360], [165, 360],
+ [45, 75], [110, 130], [185, 160], [245, 180], [255, 210], [255, 240], [245, 270], [235, 300], [235, 330], [225, 370], [205, 360], [165, 360],
   [125, 360], [105, 360], [115, 330], [125, 290], [135, 260], [115, 250], [65, 230], [35, 250], [35, 210], [35, 180],
 ];
 
 let modelTimeToXYCreate = () => {
   const model = tf.sequential();
-  model.add(tf.layers.dense({ units: 32, activation: 'linear', kernelRegularizer:'l1l2', biasRegularizer:'l1l2', inputShape: [13] }));
+  model.add(tf.layers.dense({ units: 32, activation: 'linear', inputShape: [13] }));
   model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
 
-  model.add(tf.layers.dense({ units: 8, activation: 'linear', kernelRegularizer:'l1l2', biasRegularizer:'l1l2', }));
+  model.add(tf.layers.dense({ units: 16, activation: 'linear',}));
   model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
 
-  model.add(tf.layers.dense({ units: 2, activation: 'linear', kernelRegularizer:'l1l2', biasRegularizer:'l1l2', }));
+  model.add(tf.layers.dense({ units: 8, activation: 'linear', }));
+  model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
+
+  model.add(tf.layers.dense({ units: 2, activation: 'linear', 
+  biasInitializer:tf.initializers.constant({value:0}) , kernelInitializer:tf.initializers.constant({value:0})  }));
   model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
 
   // Prepare the model for training: Specify the loss and the optimizer.
@@ -103,14 +107,16 @@ let modelTimeToXYCreate = () => {
 
 let modelCreate = () => {
   const model = tf.sequential();
-  model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 64, activation: 'linear', inputShape: [null, null, inputChannels + 13] }));
+  model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 128, activation: 'linear', inputShape: [null, null, inputChannels + 13] }));
   model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
 
-  model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 32, activation: 'linear' }));
+  model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 64, activation: 'linear' }));
+  model.add(tf.layers.batchNormalization({ }));
   model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
   //model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 32, activation: 'linear' }));
   //model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-  model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 16, activation: 'linear' }));
+  model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 32, activation: 'linear' }));
+  model.add(tf.layers.batchNormalization({ }));
   model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
   //model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 8, activation: 'linear' }));
   //model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
@@ -141,25 +147,29 @@ let modeltest = (model, modelTimeToXY) => {
 
     let back = new Float32Array(h*w*3)
     let origImagesLen = xys.length;
+    
+    let globalXY = tf.tensor([0.2,0.2],[1,1,1,2]);
     for (let i = 0; i < origImagesLen; i++) {
 
       let codedTime = convertInputTime(tf.tensor([i],[1, 1, 1])).expandDims()
 
-      let globalXY = modelTimeToXY.predict(codedTime.reshape([1, 13])).reshape([1, 1, 1, 2]);
 
-      let codedGlobalXY = convertInputXY(uv.add(globalXY))
+      let offsetXY = modelTimeToXY.predict(codedTime.reshape([1, 13])).reshape([1, 1, 1, 2]);
 
-      let image = model.predict(tf.concat([codedGlobalXY,tf.ones([1,96,96,13]).mul(codedTime)],-1), { batchSize: null })
+      let codedOffsetXYXY = convertInputXY(uv)
+
+      let image = model.predict(tf.concat([codedOffsetXYXY,tf.ones([1,96,96,13]).mul(codedTime)],-1), { batchSize: null })
+
       let xy = globalXY.dataSync()
       let gx = Math.round(xy[1]*w)
       let gy =  Math.round(xy[0]*h)
-
+      globalXY = globalXY.add(offsetXY)
       i ===2 && console.log(' xy:', gx, gy);
       let imageData= image.dataSync()
 
       
-      for(let y = Math.min(Math.max(gy, 0), h-96); y<Math.min(Math.max(gy+96, 0), h);y++){
-        for(let x = Math.min(Math.max(gx, 0), w-96); x<Math.min(Math.max(gx+96, 0), w);x++){
+      for(let y = Math.min(Math.max(gy, 0), h); y<Math.min(Math.max(gy+96, 0), h);y++){
+        for(let x = Math.min(Math.max(gx, 0), w); x<Math.min(Math.max(gx+96, 0), w);x++){
 
           back[(y*w)*3+x*3+0] = imageData[(y-gy)*96*3+(x-gx)*3+0]
           back[(y*w)*3+x*3+1] = imageData[(y-gy)*96*3+(x-gx)*3+1]
@@ -177,7 +187,9 @@ let modeltest = (model, modelTimeToXY) => {
 }
 
   ; (async () => {
-    await save(random.slice([0, 0, 0, 2], [1, h, w, 3]).mul(255).reshape([h, w, 3]), './temp/rand.jpg')
+
+    console.log(' random:',random );
+    await save(random.slice([0, 0, 0, 37], [1, h, w, 3]).mul(255).reshape([h, w, 3]), './temp/rand.jpg')
     let img = tf.node.decodeJpeg(await fs.promises.readFile('./im.jpg')).slice([0, 0, 0], [h, w, 3]).toFloat().div(255)
 
     let modelTimeToXY = modelTimeToXYCreate();
@@ -206,6 +218,7 @@ let modeltest = (model, modelTimeToXY) => {
     
     let codedTimes = []
     
+    console.log(' 111:', );
     for (let i = 0; i < origImages.length; i++) {
       codedTimes[i] = convertInputTime(tf.tensor([i],[1, 1, 1])).expandDims()
     }
@@ -215,11 +228,9 @@ let modeltest = (model, modelTimeToXY) => {
         for (let i = 0; i < origImages.length; i++) {
           let terr = model.optimizer.minimize(() => {
 
-            let globalXY = modelTimeToXY.predict(codedTimes[i].reshape([1, 13])).reshape([1, 1, 1, 2]);
+            let codedXY = convertInputXY(uv)
 
-            let codedGlobalXY = convertInputXY(uv.add(globalXY))
-
-            let image = model.predict(tf.concat([codedGlobalXY, tf.ones([1,96,96,13]).mul(codedTimes[i])],-1), { batchSize: null })
+            let image = model.predict(tf.concat([codedXY, tf.ones([1,96,96,13]).mul(codedTimes[i])],-1), { batchSize: null })
 
             let error = tf.scalar(0)
             error = error.add(tf.losses.meanSquaredError(image, origImages[i]))
@@ -230,25 +241,28 @@ let modeltest = (model, modelTimeToXY) => {
           )
 
           let terr2 = 0
-          if(e>50){
+          if(e>100 && i<origImages.length-2){
           terr2 = modelTimeToXY.optimizer.minimize(() => {
 
-            let globalXY = modelTimeToXY.predict(codedTimes[i].reshape([1, 13])).reshape([1, 1, 1, 2]);
-            
-            let error = tf.scalar(0)
-            error = error.add(globalXY.mul(-1).relu().mean())
-            error = error.add(globalXY.sub(1).relu().mean())
 
 
-            let codedGlobalXY = convertInputXY(uv.add(globalXY))
+            let codedOffsetXY1 = convertInputXY(uv)
 
-            let image = model.predict(tf.concat([codedGlobalXY, tf.ones([1,96,96,13]).mul(codedTimes[i])],-1), { batchSize: null })
+            let image = model.predict(tf.concat([codedOffsetXY1, tf.ones([1,96,96,13]).mul(codedTimes[i])],-1), { batchSize: null })
 
             //error = error.add(tf.losses.meanSquaredError(image, origImages[i]))
 
-            let codedTime = convertInputTime(tf.tensor([Math.random()*codedTimes.length],[1, 1, 1])).expandDims()
 
-            let image2 = model.predict(tf.concat([codedGlobalXY, tf.ones([1,96,96,13]).mul(codedTime)],-1), { batchSize: null })
+
+            let offsetXY = modelTimeToXY.predict(codedTimes[i].reshape([1, 13])).reshape([1, 1, 1, 2]);
+            
+            let error = tf.scalar(0)
+            //xy не должна выходить за пределы 0-1 координат
+            error = error.add(offsetXY.add(1).mul(-1).relu().mean())
+            error = error.add(offsetXY.sub(1).relu().mean())
+            let codedOffsetXY = convertInputXY(uv.add(offsetXY))
+
+            let image2 = model.predict(tf.concat([codedOffsetXY, tf.ones([1,96,96,13]).mul(codedTimes[i+1])],-1), { batchSize: null })
 
 
             error = error.add(tf.losses.meanSquaredError(image,image2))
