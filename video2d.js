@@ -201,9 +201,9 @@ let modeltest = (model, modelTimeToXY) => {
     let origImages = xys.map(xy => img.slice(xy, [96, 96]).expandDims());
 
 
-    //let back = tf.zeros(img.shape)
-    //ys.forEach((img, i) => { back = back.maximum(img.reshape([96, 96, 3]).pad([[xys[i][0], (352 - 96) - xys[i][0]], [xys[i][1], (480 - 96) - xys[i][1]], [0, 0]])) })
-    //await save(back.mul(255), './temp/back.jpg')
+    let back = tf.zeros(img.shape)
+    origImages.forEach((img, i) => { back = back.maximum(img.reshape([96, 96, 3]).pad([[xys[i][0], (352 - 96) - xys[i][0]], [xys[i][1], (480 - 96) - xys[i][1]], [0, 0]])) })
+    await save(back.mul(255), './temp/back.jpg')
 
     //let mask = tf.zeros(img.shape.slice(0, -1).concat([1]))
     //ys.forEach((img, i) => { mask = mask.maximum(tf.ones([96, 96, 1]).pad([[xys[i][0], (352 - 96) - xys[i][0]], [xys[i][1], (480 - 96) - xys[i][1]], [0, 0]])) })
@@ -258,8 +258,8 @@ let modeltest = (model, modelTimeToXY) => {
             
             let error = tf.scalar(0)
             //xy не должна выходить за пределы 0-1 координат
-            error = error.add(offsetXY.add(1).mul(-1).relu().mean())
-            error = error.add(offsetXY.sub(1).relu().mean())
+            error = error.add(offsetXY.add(2).mul(-1).relu().mean())
+            error = error.add(offsetXY.sub(2).relu().mean())
             let codedOffsetXY = convertInputXY(uv.add(offsetXY))
 
             let image2 = model.predict(tf.concat([codedOffsetXY, tf.ones([1,96,96,13]).mul(codedTimes[i+1])],-1), { batchSize: null })
