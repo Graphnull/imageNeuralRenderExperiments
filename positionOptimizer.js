@@ -42,6 +42,15 @@ let modeltest = async  (origImages, xyWeights) => {
   await save(back, './temp/result.jpg')
   back.dispose()
 }
+
+let diffCache = new Float32Array(xys.length*xys.length*96*2*96*2*2)
+let hit  = 0
+let total = 0
+setInterval(()=>{
+  console.log("hit/total:",hit/total)
+  hit=0;
+  total=0;
+},1000)
 /**
  * 
  * @param {tf.Tensor} img1 
@@ -50,54 +59,59 @@ let modeltest = async  (origImages, xyWeights) => {
  * @param {number} dy 
  * @returns 
  */
-let diff = (data, data2, w,h,channels, dx,dy, debug)=>{
+let diff = (imgs,i,j, w,h,channels, dx,dy)=>{
+  let data = imgs[i]
+  let  data2 = imgs[j]
+  total++;
   //console.log('w,h :', w,h);
-
+  const debug = false
   let error = 0;
-  let xstart = Math.max(0,-dx)
-  let ystart = Math.max(0,-dy)
-  let xend = w+Math.min(0,-dx)
-  let yend = h+Math.min(0,-dy)
-  let deb = new Float32Array(w*h*channels)
+  let xstart = Math.min(Math.max(0,-dx),w)
+  let ystart = Math.min(Math.max(0,-dy),h)
+  let xend = Math.max(w+Math.min(0,-dx),0)
+  let yend = Math.max(h+Math.min(0,-dy),0)
+  //let deb = new Float32Array(w*h*channels)
 
-  let count = (xend-xstart)*(yend-ystart)
-
+ 
+  let count = Math.max((xend-xstart)*(yend-ystart),0)
+  if(!count){
+    return [0,0]
+  }
+  let cachePos= i*xys.length*96*2*96*2*2+j*96*2*96*2*2+ (dx+96)*96*2*2+(dy+96)*2+0;
+  if(diffCache[cachePos+1]){
+    hit++
+    return [diffCache[cachePos+0], diffCache[cachePos+1]]
+  }
   let find=false
-  for(let x=xstart;x<xend;x++){
-    for(let y=ystart;y<yend;y++){
+  for(let x=xstart;x<xend;x++){ 
 
+    for(let y=ystart;y<yend;y++){
+  
       let pix1 = y*w*channels+x*channels+0
       let pix2 = (y+dy)*w*channels+(x+dx)*channels+0
-
-
-      if(x>w){
-        console.log(' x>w :');
-      }
-
-      if(typeof data2[pix2+0] !=='number'){
-        continue;
-      }
+      
       for(let c=0;c<channels;c++){
         error += Math.abs(data[pix1+c]-data2[pix2+c])
        
-        if(Math.abs(data[pix1+c]-data2[pix2+c]) && debug){
+        /*if(Math.abs(data[pix1+c]-data2[pix2+c]) && debug){
           console.log('Math.abs(data[pix1+c]-data2[pix2+c]) :', Math.abs(data[pix1+c]-data2[pix2+c]), data[pix1+c], data2[pix2+c]);
 
           //console.log(' :',y,x );
-          deb[pix1+c]= data[pix1+c]*255
+          //deb[pix1+c]= data[pix1+c]*255
           find=true
           //console.log('err :',channels, x,y,c,data[pix1+c],data2[pix2+c], Math.abs(data[pix1+c]-data2[pix2+c]) );
-        }
+        }*/
       }
       
     }
   }
   
-  find && save(tf.tensor(deb, [h,w,channels]), './deb.jpg')
- 
+  //find && save(tf.tensor(deb, [h,w,channels]), './deb.jpg')
 
+  diffCache[cachePos+0] = error/count
+  diffCache[cachePos+1] = count
   //console.log(' errorerrorerror:',error, count );
-  return [error/(count+0.001), count]
+  return [error/count, count]
 }
 
 let r = new Float32Array(167).map(v=>Math.random())
@@ -130,17 +144,24 @@ let getRand=()=>Math.random();
     let timeLog = new Date()
     
 
-    let optimizer = tf.train.adam(0.5)
+    let optimizer = tf.train.adam(1.1)
     await optimizer.setWeights([{name:'xy',tensor:xyWeights} ])
 
-    vgg19.outputs = vgg19.nodesByDepth['16'][0].outputTensors[0]
+    vgg19.outputs = vgg19.nodesByDepth['19'][0].outputTensors[0]
     //console.log('vgg19.outputs[0] :', vgg19.layersByDepth);
 
-    let features = origImages//.map(v=>vgg19.execute(v,vgg19.outputs.name) );
+    let features = origImages
+    let vggEnable =false;
+    if(vggEnable){
+      features = features.map(v=>vgg19.execute(v,vgg19.outputs.name).resizeBilinear([96,96]) );
+      
+    }
+
     let wf = features[0].shape[features[0].shape.length-2];
     let hf = features[0].shape[features[0].shape.length-3];
     let cf = features[0].shape[features[0].shape.length-1];
     features = features.map(v=>v.dataSync())
+    features = features.map((v, i)=>{v.i=i;return v})
     //console.log('vgg19 :', features[0].shape);
     //process.exit(0)
     //vgg19
@@ -149,45 +170,45 @@ let getRand=()=>Math.random();
         //let loss = tf.scalar(0)
         let grad = new Float32Array(xyWeights.shape[0]*xyWeights.shape[1])
         let xyWeightsData = xyWeights.dataSync()
-        
+        //features = features.sort(()=>Math.random()-0.5)
         for (let i = 0; i < features.length-1; i++) {
 
           let count =0;
           for (let j = i+1; j < features.length; j++) {
-            let wx = Math.round(xyWeightsData[i*2+0]-xyWeightsData[j*2+0])
+            let wx = Math.round(xyWeightsData[features[i].i*2+0]-xyWeightsData[features[j].i*2+0])
             //console.log('wx :', wx, xyWeightsData[i*2+0], xyWeightsData[j*2+0]);
-            let wy = Math.round(xyWeightsData[i*2+1]-xyWeightsData[j*2+1])
+            let wy = Math.round(xyWeightsData[features[i].i*2+1]-xyWeightsData[features[j].i*2+1])
 
-            let rv = Math.round(getRand()*200)
-            let [err, count0] = diff(features[i], features[j],wf, hf,cf, rv+wx,0+wy)
+            let rv = Math.round(getRand()*100)
+            let [err, count0] = diff(features,features[i].i, features[j].i, wf, hf,cf, rv+wx,0+wy)
             let lcount = count0
             let dx = rv
             let dy = 0
-            rv = Math.round(getRand()*200)
-            let [err1, count1] = diff(features[i], features[j],wf, hf,cf, 0+wx,rv+wy)
+            rv = Math.round(getRand()*100)
+            let [err1, count1] = diff(features,features[i].i, features[j].i, wf, hf,cf, 0+wx,rv+wy)
             if(err1<err && count1){
               dx =0
               dy=rv
               err= err1
               lcount += count1
             }
-            rv = Math.round(getRand()*(-200))
-            let [err2, count2] = diff(features[i], features[j],wf, hf,cf, 0+wx, rv+wy)
+            rv = Math.round(getRand()*(-100))
+            let [err2, count2] = diff(features,features[i].i, features[j].i, wf, hf,cf, 0+wx, rv+wy)
             if(err2<err && count2){
               dx =0
               dy=rv
               err=err2
               lcount += count2
             }
-            rv = Math.round(getRand()*(-200))
-            let [err3, count3] = diff(features[i], features[j],wf, hf,cf, rv+wx,0+wy)
+            rv = Math.round(getRand()*(-100))
+            let [err3, count3] = diff(features,features[i].i, features[j].i, wf, hf,cf, rv+wx,0+wy)
             if(err3<err && count3){
               dx = rv
               dy=0
               err=err3
               lcount += count3
             }
-            let [err4, count4] = diff(features[i], features[j],wf, hf,cf, 0+wx,0+wy)
+            let [err4, count4] = diff(features,features[i].i, features[j].i, wf, hf,cf, 0+wx,0+wy)
             if(err4<err && count4){
               dx =0
               dy=0
@@ -210,19 +231,20 @@ let getRand=()=>Math.random();
               //grad[i*2+0]-=150-xyWeightsData[i*2+0]
               //grad[i*2+1]-=150-xyWeightsData[i*2+1]
             }else{
-              grad[i*2+0]-=dx*Math.max(0, err4 - err )
-              grad[i*2+1]-=dy*Math.max(0, err4 - err )
-              grad[j*2+0]+=dx*Math.max(0, err4 - err )
-              grad[j*2+1]+=dy*Math.max(0, err4 - err )
+              grad[features[i].i*2+0]-=dx*err
+              grad[features[i].i*2+1]-=dy*err
+              grad[features[j].i*2+0]+=dx*err
+              grad[features[j].i*2+1]+=dy*err
             }
             count += lcount
-            if(isNaN(grad[i*2+0])){
+            if(isNaN(grad[features[i].i*2+0])){
+            console.log('features[i].i :', features[i].i);
               throw new Error('!!!')
             }
           }
           if(count===0){
-            grad[i*2+0]-=-xyWeightsData[i*2+0]
-            grad[i*2+1]-=-xyWeightsData[i*2+1]
+            grad[features[i].i*2+0]-=-xyWeightsData[features[i].i*2+0]
+            grad[features[i].i*2+1]-=-xyWeightsData[features[i].i*2+1]
           }
         }
 
@@ -231,10 +253,10 @@ let getRand=()=>Math.random();
         optimizer.applyGradients([ {name:'xy',tensor:tf.tensor(grad,[features.length,2])} ])
         
 
-        e % 10 == 9 &&console.log(e, new Date() - timeLog)
+        e % 100 == 9 &&console.log(e, new Date() - timeLog)
       })
      
-      e % 10 == 9 && await modeltest(origImages, xyWeights.dataSync())
+      e % 100 == 9 && await modeltest(origImages, xyWeights.dataSync())
     
     }
 
