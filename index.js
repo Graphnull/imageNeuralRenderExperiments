@@ -79,24 +79,28 @@ let modelPrep = () => {
     const model = tf.sequential();
     model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 96, activation: 'linear', inputShape: [null, null, inputChannels] }));
     model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
+    model.add(tf.layers.batchNormalization({}));
     model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 64, activation: 'linear', }));
     model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
+    model.add(tf.layers.batchNormalization({}));
     //model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 64, activation: 'linear', }));
     //model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
     //model.add(tf.layers.batchNormalization({}));
     model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 50, activation: 'linear', }));
     model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
+    model.add(tf.layers.batchNormalization({}));
     //model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 30, activation: 'linear', }));
     //model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
     model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 20, activation: 'linear', }));
     model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
+    model.add(tf.layers.batchNormalization({}));
     model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 12, activation: 'linear', }));
     model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-    //model.add(tf.layers.batchNormalization({}));
+    model.add(tf.layers.batchNormalization({}));
 
     model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 6, activation: 'linear', }));
     model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-    //model.add(tf.layers.batchNormalization({}));
+    model.add(tf.layers.batchNormalization({}));
     model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 3, activation: 'linear', }));
     model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
 
@@ -105,49 +109,7 @@ let modelPrep = () => {
 
     return model;
 }
-let modelPrepDetect = () => {
-    const model = tf.sequential();
-    model.add(tf.layers.conv2d({ kernelSize: [3, 3], padding: 'same', filters: 24, activation: 'linear', inputShape: [null, null, 3] }));
-    model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-    model.add(tf.layers.conv2d({ kernelSize: [3, 3], padding: 'same', filters: 16, activation: 'linear', }));
-    model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-    model.add(tf.layers.conv2d({ kernelSize: [3, 3], padding: 'same', filters: 12, activation: 'linear', }));
-    model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-    model.add(tf.layers.conv2d({ kernelSize: [3, 3], padding: 'same', filters: 8, activation: 'linear', }));
-    model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-    //model.add(tf.layers.batchNormalization({}));
 
-    model.add(tf.layers.conv2d({ kernelSize: [3, 3], padding: 'same', filters: 4, activation: 'linear', }));
-    model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-    //model.add(tf.layers.batchNormalization({}));
-    model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 1, activation: 'linear', }));
-    model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-
-    // Prepare the model for training: Specify the loss and the optimizer.
-    model.compile({ loss: 'meanSquaredError', optimizer: 'adam' });
-
-    return model;
-}
-
-let modelPrepDetectStupid = () => {
-    const model = tf.sequential();
-    model.add(tf.layers.conv2d({ kernelSize: [3, 3], padding: 'same', filters: 12, activation: 'linear', inputShape: [null, null, 3] }));
-    model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-    model.add(tf.layers.conv2d({ kernelSize: [3, 3], padding: 'same', filters: 16, activation: 'linear', }));
-    model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-    model.add(tf.layers.conv2d({ kernelSize: [3, 3], padding: 'same', filters: 8, activation: 'linear', }));
-    model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-    //model.add(tf.layers.batchNormalization({}));
-
-    //model.add(tf.layers.batchNormalization({}));
-    model.add(tf.layers.conv2d({ kernelSize: [1, 1], padding: 'valid', filters: 1, activation: 'linear', }));
-    model.add(tf.layers.leakyReLU({ alpha: 0.01 }));
-
-    // Prepare the model for training: Specify the loss and the optimizer.
-    model.compile({ loss: 'meanSquaredError', optimizer: 'adam' });
-
-    return model;
-}
 
 let modeltest = (model) => {
     /*let uv =  new Float32Array(w*h*inputChannels)
@@ -187,8 +149,6 @@ let modeltest = (model) => {
         //console.log('vggx :', vggx);
 
         let model = modelPrep()
-        let modelDetect = modelPrepDetect()
-        let modelDetectStupid = modelPrepDetectStupid()
         //const xs = tf.stack(xys.map(xy=> uv.add([xy[0]/375, xy[1]/500]) )).reshape([12*100*100,2]);
         let xs = xys.map(xy => random.slice(xy, [96, 96]).expandDims())
         xs = [].concat(xs.map(x => x.slice([0, 0, 0], [1, 32, 96]))).concat(xs.map(x => x.slice([0, 32, 0], [1, 32, 96]))).concat(xs.map(x => x.slice([0, 64, 0], [1, 32, 96])))
@@ -202,31 +162,9 @@ let modeltest = (model) => {
                 for (let i = 0; i < xs.length; i++) {
                     let terr = model.optimizer.minimize(() => {
                         let error = tf.scalar(0)
-                        //vggtest
-                        if (Math.random() < 0.05) {
 
-                            //let vggres1 = vgg19.predict(model.predict(random.expandDims(),{batchSize:null}))
-                            //console.log('vggres :', vggres);
-                            //error = error.add(tf.losses.meanSquaredError(vggr, vggres1))
-
-                            //let vggres = vgg19.predict(model.predict(xs[i],{batchSize:null}))
-                            //console.log('vggres :', vggres);
-                            //error = error.add(tf.losses.meanSquaredError(vggy[i], vggres))
-                        }
-                        //copytest
                         let res = model.predict(xs[i], { batchSize: null })
 
-                        if (e > 300) {
-                            let tx = Math.floor(Math.random() * (480 - 96))
-                            let ty = Math.floor(Math.random() * (352 - 96))
-
-                            let rest = model.predict(random.slice([ty, tx], [96, 96]).expandDims(), { batchSize: null })
-                            let restest = modelDetectStupid.predict(rest, { batchSize: null })
-                            let restest2 = modelDetect.predict(rest, { batchSize: null })
-
-                            error = error.add(tf.losses.meanSquaredError(restest2, mask.slice([ty, tx], [96, 96]).expandDims()).mul(0.005))
-                            error = error.add(restest.relu().mean().mul(0.005))
-                        }
                         error = error.add(tf.losses.meanSquaredError(res, ys[i]))
                         return error;
 
@@ -234,27 +172,7 @@ let modeltest = (model) => {
                         [].concat(...model.layers.map(l => l._trainableWeights.map(v => v.val)))
                     )
 
-                    let terr2 = 0;
-                    if (e > 200) {
-                        terr2 = modelDetect.optimizer.minimize(() => {
-                            let error = tf.scalar(0)
-                            let tx = Math.floor(Math.random() * (480 - 96))
-                            let ty = Math.floor(Math.random() * (352 - 96))
-
-                            let rest = model.predict(random.slice([ty, tx], [96, 96]).expandDims(), { batchSize: null })
-                            let restest = modelDetectStupid.predict(rest, { batchSize: null })
-                            let restest2 = modelDetect.predict(rest, { batchSize: null })
-
-                            error = error.add(tf.losses.meanSquaredError(restest, mask.slice([ty, tx], [96, 96]).expandDims()))
-                            error = error.add(tf.losses.meanSquaredError(restest2, mask.slice([ty, tx], [96, 96]).expandDims()))
-                            return error;
-
-                        }, true,
-                            [].concat(...modelDetect.layers.map(l => l._trainableWeights.map(v => v.val))).concat(...modelDetectStupid.layers.map(l => l._trainableWeights.map(v => v.val)))
-                        )
-                    }
-
-                    loss = loss.add(terr.add(terr2).div(xs.length).div(2))
+                    loss = loss.add(terr.div(xs.length))
                 }
 
                 console.log(e, loss.dataSync()[0], new Date() - time)
